@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>MixMyFace — No-Build</title>
+  <style>
+    :root{color-scheme:dark}
+    body{margin:0;background:#0b0f1a;color:#e5e7eb;font:14px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Helvetica,Arial}
+    .wrap{padding:16px;max-width:1200px;margin:0 auto}
+    .row{display:grid;grid-template-columns:1fr 2fr;gap:16px}
+    @media (max-width:900px){.row{grid-template-columns:1fr}}
+    .card{background:#111827;border:1px solid #334155;border-radius:16px;box-shadow:0 2px 24px rgba(0,0,0,.25);padding:16px}
+    h1{margin:0 0 12px;font-size:22px}
+    h2{margin:0 0 10px;font-size:16px}
+    label span{display:block;font-size:12px;color:#94a3b8;margin-bottom:4px}
+    input[type="file"]{width:100%}
+    input[type="range"]{width:100%}
+    .btn{background:#e5e7eb;color:#0b0f1a;border:0;border-radius:14px;padding:8px 12px;cursor:pointer}
+    .btn:active{transform:translateY(1px)}
+    .muted{color:#94a3b8;font-size:12px}
+    .canvasBox{overflow:auto;padding:8px}
+    canvas{background:#0b1220;border-radius:12px;box-shadow:inset 0 0 0 1px #334155}
+    .tips{margin-top:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <h1>MixMyFace — on-device (no build)</h1>
+      <button id="exportBtn" class="btn">Export PNG</button>
+    </header>
+
+    <main class="row" style="margin-top:16px">
+      <section class="card">
+        <h2>1) Učitaj slike</h2>
+        <label>
+          <span>Baza / Face A</span>
+          <input id="baseInput" type="file" accept="image/*">
+        </label>
+        <div style="height:10px"></div>
+        <label>
+          <span>Preklop / Face B</span>
+          <input id="overlayInput" type="file" accept="image/*">
+        </label>
+
+        <div style="height:16px"></div>
+        <h2>2) Platno</h2>
+        <label>
+          <span>Širina: <b id="wLabel">900</b> px</span>
+          <input id="wRange" type="range" min="480" max="2000" value="900">
+        </label>
+        <label>
+          <span>Visina: <b id="hLabel">1200</b> px</span>
+          <input id="hRange" type="range" min="640" max="2400" value="1200">
+        </label>
+
+        <div style="height:16px"></div>
+        <h2>3) Transformiši preklop</h2>
+        <label>
+          <span>Neprozirnost: <b id="opLabel">60</b>%</span>
+          <input id="opRange" type="range" min="0" max="100" value="60">
+        </label>
+        <label>
+          <span>Skaliranje: <b id="scLabel">1.00×</b></span>
+          <input id="scRange" type="range" min="10" max="300" value="100">
+        </label>
+        <label>
+          <span>Rotacija: <b id="rotLabel">0</b>°</span>
+          <input id="rotRange" type="range" min="-180" max="180" value="0">
+        </label>
+
+        <div style="height:16px"></div>
+        <h2>4) Maska lica</h2>
+        <label style="display:flex;align-items:center;gap:8px">
+          <input id="maskChk" type="checkbox" checked>
+          <span>Uključi masku (feathered)</span>
+        </label>
+        <label>
+          <span>Poluprečnik maske: <b id="mrLabel">300</b> px</span>
+          <input id="mrRange" type="range" min="50" max="800" value="300">
+        </label>
+        <label>
+          <span>Feather: <b id="ftLabel">120</b> px</span>
+          <input id="ftRange" type="range" min="0" max="400" value="120">
+        </label>
+
+        <div class="tips muted">
+          Tips: prevuci mišem po platnu da pomeraš Face B. Točkić = zoom preklopa. Sve je lokalno, nema uploada.
+        </div>
+      </section>
+
+      <section class="card canvasBox">
+        <div style="display:flex;justify-content:center">
+          <canvas id="c" width="900" height="1200"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <footer class="muted" style="margin-top:16px">All processing happens locally in your browser. © MixMyFace</footer>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const baseInput = document.getElementById('baseInput');
+    const overlayInput = document.getElementById('overlayInput');
+
+    const wRange = document.getElementById('wRange');
+    const hRange = document.getElementById('hRange');
+    const wLabel = document.getElementById('wLabel');
+    const hLabel = document.getElementById('hLabel');
+
+    const opRange = document.getElementById('opRange');
+    const scRange = document.getElementById('scRange');
+    const rotRange = document.getElementById('rotRange');
+    const opLabel = document.getElementById('opLabel');
+    const scLabel = document.getElementById('scLabel');
+    const rotLabel = document.getElementById('rotLabel');
+
+    const mrRange = document.getElementById('mrRange');
+    const ftRange = document.getElementById('ftRange');
+    const mrLabel = document.getElementById('mrLabel');
+    const ftLabel = document.getElementById('ftLabel');
+    const maskChk = document.getElementById('maskChk');
+
+    const exportBtn = document.getElementById('exportBtn');
+
+    let baseImg = null;
+    let overlayImg = null;
+
+    let ovx = canvas.width/2;
+    let ovy = canvas.height/2;
+    let scale = 1;
+    let rotation = 0;
+    let opacity = 0.6;
+
+    let maskRadius = 300;
+    let feather = 120;
+
+    let dragging = false;
+    let dragStart = null;
+
+    function loadImageFromFile(file, cb){
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>{ cb(img); URL.revokeObjectURL(url); draw(); };
+      img.src = url;
+    }
+
+    function fitContain(sw, sh, mw, mh){
+      const r = Math.min(mw/sw, mh/sh);
+      return {x:(mw-sw*r)/2, y:(mh-sh*r)/2, w:sw*r, h:sh*r};
+    }
+    function naturalSizeFit(img, mw, mh){
+      const r = Math.min(mw/img.width, mh/img.height);
+      return {w: img.width*r, h: img.height*r};
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#0b0f1a';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      if (baseImg){
+        const {x,y,w,h} = fitContain(baseImg.width, baseImg.height, canvas.width, canvas.height);
+        ctx.drawImage(baseImg, x,y,w,h);
+      }
+
+      if (overlayImg){
+        ctx.save();
+        ctx.globalAlpha = opacity;
+
+        if (maskChk.checked){
+          const maskCanvas = document.createElement('canvas');
+          maskCanvas.width = canvas.width;
+          maskCanvas.height = canvas.height;
+          const mctx = maskCanvas.getContext('2d');
+
+          const grad = mctx.createRadialGradient(ovx, ovy, Math.max(0, maskRadius - feather), ovx, ovy, maskRadius);
+          grad.addColorStop(0,'rgba(255,255,255,1)');
+          grad.addColorStop(1,'rgba(255,255,255,0)');
+          mctx.fillStyle = grad;
+          mctx.fillRect(0,0,canvas.width,canvas.height);
+
+          const temp = document.createElement('canvas');
+          temp.width = canvas.width;
+          temp.height = canvas.height;
+          const tctx = temp.getContext('2d');
+
+          tctx.save();
+          tctx.translate(ovx,ovy);
+          tctx.rotate(rotation*Math.PI/180);
+          tctx.scale(scale,scale);
+          const ns = naturalSizeFit(overlayImg, canvas.width, canvas.height);
+          tctx.drawImage(overlayImg, -ns.w/2, -ns.h/2, ns.w, ns.h);
+          tctx.restore();
+
+          tctx.globalCompositeOperation = 'destination-in';
+          tctx.drawImage(maskCanvas,0,0);
+
+          ctx.drawImage(temp,0,0);
+          ctx.restore();
+        } else {
+          ctx.translate(ovx,ovy);
+          ctx.rotate(rotation*Math.PI/180);
+          ctx.scale(scale,scale);
+          const ns = naturalSizeFit(overlayImg, canvas.width, canvas.height);
+          ctx.drawImage(overlayImg, -ns.w/2, -ns.h/2, ns.w, ns.h);
+          ctx.restore();
+        }
+      }
+    }
+
+    // inputs
+    baseInput.addEventListener('change', e=>{
+      const f = e.target.files?.[0]; if (f) loadImageFromFile(f, img=>{ baseImg=img; });
+    });
+    overlayInput.addEventListener('change', e=>{
+      const f = e.target.files?.[0]; if (f) loadImageFromFile(f, img=>{ overlayImg=img; });
+    });
+
+    wRange.oninput = ()=>{ canvas.width = +wRange.value; wLabel.textContent = canvas.width; draw(); };
+    hRange.oninput = ()=>{ canvas.height = +hRange.value; hLabel.textContent = canvas.height; draw(); };
+
+    opRange.oninput = ()=>{ opacity = (+opRange.value)/100; opLabel.textContent = opRange.value; draw(); };
+    scRange.oninput = ()=>{ scale = (+scRange.value)/100; scLabel.textContent = scale.toFixed(2)+'×'; draw(); };
+    rotRange.oninput = ()=>{ rotation = +rotRange.value; rotLabel.textContent = rotRange.value; draw(); };
+
+    mrRange.oninput = ()=>{ maskRadius = +mrRange.value; mrLabel.textContent = mrRange.value; draw(); };
+    ftRange.oninput = ()=>{ feather = +ftRange.value; ftLabel.textContent = ftRange.value; draw(); };
+    maskChk.onchange = ()=>{ draw(); };
+
+    canvas.addEventListener('pointerdown', e=>{
+      dragging = true;
+      const r = canvas.getBoundingClientRect();
+      dragStart = { x:e.clientX - r.left, y:e.clientY - r.top, ovx, ovy };
+    });
+    canvas.addEventListener('pointermove', e=>{
+      if(!dragging || !dragStart) return;
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      ovx = dragStart.ovx + (x - dragStart.x);
+      ovy = dragStart.ovy + (y - dragStart.y);
+      draw();
+    });
+    const stopDrag = ()=>{ dragging=false; dragStart=null; };
+    canvas.addEventListener('pointerup', stopDrag);
+    canvas.addEventListener('pointerleave', stopDrag);
+
+    canvas.addEventListener('wheel', e=>{
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      scale = Math.max(0.05, Math.min(10, scale * factor));
+      scRange.value = Math.round(scale*100);
+      scLabel.textContent = scale.toFixed(2)+'×';
+      draw();
+    }, {passive:false});
+
+    exportBtn.addEventListener('click', ()=>{
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mixmyface_${Date.now()}.png`;
+      a.click();
+    });
+
+    draw();
+  </script>
+</body>
+</html>
