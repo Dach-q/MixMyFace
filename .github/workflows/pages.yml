@@ -19,40 +19,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Show basics
+      - id: finddir
         run: |
-          echo "== pwd ==" && pwd
-          echo "== files ==" && ls -la
-          echo "== package.json ==" && (cat package.json || true)
-          echo "== vite.config.ts ==" && (cat vite.config.ts || true)
+          set -e
+          D=$(git ls-files | grep -E '^([^/]+/)*package\.json$' | head -n1 || true)
+          if [ -z "$D" ]; then
+            exit 1
+          fi
+          DIR=$(dirname "$D")
+          if [ "$DIR" = "." ]; then DIR=""; fi
+          echo "dir=$DIR" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install deps
+      - name: Install
+        working-directory: ${{ steps.finddir.outputs.dir }}
         run: npm install --no-fund --no-audit
 
-      - name: Show versions
-        run: |
-          node -v
-          npm -v
-          npx vite --version || true
-
-      - name: Build (npm script or fallback to npx)
+      - name: Build
+        working-directory: ${{ steps.finddir.outputs.dir }}
         run: |
           if npm run -s build; then
-            echo "Built via npm script"
+            echo done
           else
-            echo "npm run build failed, trying npx vite build..."
             npx --yes vite@5.4.8 build --base=/MixMyFace/
           fi
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ${{ steps.finddir.outputs.dir }}dist
 
   deploy:
     runs-on: ubuntu-latest
