@@ -1,29 +1,19 @@
-# MixMyFace — MVP (on‑device)
+# MixMyFace — MVP (on-device)
 
-Minimalni web MVP za mešanje dva lica **lokalno u browseru** (nema uploada na server).
-- Učitavanje dve slike (Face A / Face B)
-- Ručno poravnanje (drag/zoom/rotate)
-- Feathered maska (radius/feather)
-- Export PNG
+**AI-powered on-device face blending.**  
+Mix two faces locally in your browser with real-time drag/zoom/rotate, feathered masking, and PNG export.  
+**Privacy-first:** no uploads, 100% client-side.
 
-## Pokretanje lokalno
+## Features
+- Load two images (Face A / Face B)
+- Manual alignment: drag, wheel-zoom, rotate
+- Feathered circular mask (radius & feather control)
+- Adjustable opacity for seamless blending
+- Canvas size controls
+- Export final image as PNG
+- All processing happens locally (no server)
+
+## Quick Start
 ```bash
 npm install
 npm run dev
-```
-
-## Build
-```bash
-npm run build
-npm run preview
-```
-
-## Deploy na GitHub Pages (ručni, klasičan)
-1. Kreiraj repo na GitHub-u i uploaduj sve fajlove iz ovog foldera.
-2. U Settings → Pages → Build and deployment: Source = GitHub Actions ili Deploy from a branch (dist/ folder posle build-a).
-3. Ako koristiš Actions, dodaj Vite static deploy workflow ili koristi branch deploy:
-   - `npm run build` → generiše `dist/`
-   - push `dist/` na `gh-pages` branch i uključi Pages na tom branchu.
-
-## Privatnost
-Sve obrade su **on-device** — slike **ne napuštaju** tvoj računar.
