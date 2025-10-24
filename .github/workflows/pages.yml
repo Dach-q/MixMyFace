@@ -19,11 +19,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show basics
+        run: |
+          echo "== pwd ==" && pwd
+          echo "== files ==" && ls -la
+          echo "== package.json ==" && (cat package.json || true)
+          echo "== vite.config.ts ==" && (cat vite.config.ts || true)
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --no-fund --no-audit
-      - run: npm run build
+
+      - name: Install deps
+        run: npm install --no-fund --no-audit
+
+      - name: Show versions
+        run: |
+          node -v
+          npm -v
+          npx vite --version || true
+
+      - name: Build (npm script or fallback to npx)
+        run: |
+          if npm run -s build; then
+            echo "Built via npm script"
+          else
+            echo "npm run build failed, trying npx vite build..."
+            npx --yes vite@5.4.8 build --base=/MixMyFace/
+          fi
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
